@@ -1,23 +1,30 @@
 package application;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 
 public class Particle {
-    private double posX, posY;
-    private double velocityX, velocityY;
-    private double forceX, forceY;
-    private double mass;
-    private double circleSize;
-    private Circle particleCircle;
-    private static double timeStep = 0.01;
+    private static final AtomicLong nextId = new AtomicLong(0);
+    
+    private final long id = nextId.getAndIncrement();
+    private final Circle circle;
+    private double posX;
+    private double posY;
+    private double velocityX;
+    private double velocityY;
+    private double forceX;
+    private double forceY;
+    private double mass = 1.0;
+    private final double radius;
 
-    public Particle(double size, double x, double y) {
-        this.circleSize = size;
+    public Particle(double radius, double x, double y) {
+        this.radius = radius;
         this.posX = x;
         this.posY = y;
-        this.mass = Math.PI * size * size;
-        this.particleCircle = new Circle(x, y, size, Color.BLACK);
+        this.circle = new Circle(radius);
+        updateView();
     }
 
     public void resetForces() {
@@ -25,36 +32,50 @@ public class Particle {
         forceY = 0;
     }
 
-    public void addForce(double fx, double fy) {
+    public void applyForce(double fx, double fy) {
         forceX += fx;
         forceY += fy;
     }
 
-    public void updatePhysics() {
-        double accelX = forceX / mass;
-        double accelY = forceY / mass;
+    public void updatePhysics(double deltaTime) {
+        // a = F/m
+        double ax = forceX / mass;
+        double ay = forceY / mass;
         
-        velocityX += accelX * timeStep;
-        velocityY += accelY * timeStep;
+        // Atualizar velocidade
+        velocityX += ax * deltaTime;
+        velocityY += ay * deltaTime;
         
-        posX += velocityX * timeStep;
-        posY += velocityY * timeStep;
+        // Atualizar posição
+        posX += velocityX * deltaTime;
+        posY += velocityY * deltaTime;
     }
 
     public void updateView() {
-        particleCircle.setCenterX(posX);
-        particleCircle.setCenterY(posY);
+        circle.setCenterX(posX);
+        circle.setCenterY(posY);
     }
 
-    // Getters e Setters
+    public void setPos(double x, double y) {
+        this.posX = x;
+        this.posY = y;
+    }
+
+    public void setVelocity(double vx, double vy) {
+        this.velocityX = vx;
+        this.velocityY = vy;
+    }
+
+    // Getters
+    public Circle getCircle() { return circle; }
     public double getPosX() { return posX; }
     public double getPosY() { return posY; }
-    public void setPos(double x, double y) { posX = x; posY = y; }
     public double getVelocityX() { return velocityX; }
     public double getVelocityY() { return velocityY; }
-    public void setVelocity(double vx, double vy) { velocityX = vx; velocityY = vy; }
-    public double getCircleSize() { return circleSize; }
+    public double getRadius() { return radius; }
     public double getMass() { return mass; }
+    public long getId() { return id; }
+    
+    // Setters
     public void setMass(double mass) { this.mass = mass; }
-    public Circle getParticleCircle() { return particleCircle; }
 }
