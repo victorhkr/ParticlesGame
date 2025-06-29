@@ -5,36 +5,43 @@ import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Slider;
+import javafx.scene.control.Tooltip;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.text.Font;
+import javafx.scene.text.Text;
+import javafx.scene.text.TextAlignment;
 import javafx.stage.Stage;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class ParticlesGame extends Application {
     private static final int SCREEN_SIZE_X = 800;
     private static final int SCREEN_SIZE_Y = 600;
     private static final int PARTICLE_SIZE = 5;
     private static double GRAVITY = 10.00;
-    private static final double REPEL_CONSTANT = 100;
     private static final double MIN_DISTANCE = 0.01;
     private static final double MAX_FORCE = 1000.0;
     private static final double FIXED_STEP_SECONDS = 0.016; // 60 FPS
+    private static boolean COLLISIONS_ENABLED = true;
 
     private final List<Particle> particles = new ArrayList<>();
     private long frameCount = 0;
     private long startTime = System.nanoTime();
     private Label fpsLabel;
     private Label particleLabel;
-    private Pane simulationPane; // Referência mantida para remoção de partículas
+    private Pane simulationPane;
 
     public ParticlesGame() {
     }
@@ -44,37 +51,87 @@ public class ParticlesGame extends Application {
         simulationPane = new Pane();
         simulationPane.setPrefSize(SCREEN_SIZE_X, SCREEN_SIZE_Y);
 
-        // Painel de controle
-        HBox controlPanel = new HBox(10);
-        controlPanel.setPadding(new Insets(10));
-        controlPanel.setAlignment(Pos.CENTER);
-
+        // Painel de controle principal
+        VBox mainControlPanel = new VBox(15);
+        mainControlPanel.setPadding(new Insets(15));
+        mainControlPanel.setAlignment(Pos.TOP_CENTER);
+        
+        // Título do jogo
+        Label titleLabel = new Label("Particles Game");
+        titleLabel.setFont(Font.font("Arial", 24));
+        titleLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #2c3e50;");
+        
+        // Descrição do jogo
+        Text description = new Text("Simulação de partículas com gravidade e colisões.\n" +
+                                   "Clique com botão esquerdo para adicionar uma partícula,\n" +
+                                   "botão direito para remover. Partículas são destruídas\n" +
+                                   "quando tocam nas bordas da tela.");
+        description.setTextAlignment(TextAlignment.CENTER);
+        description.setFont(Font.font("Arial", 14));
+        
+        // Painel de controle para FPS e contagem
+        HBox statsPanel = new HBox(20);
+        statsPanel.setAlignment(Pos.CENTER);
+        
+        fpsLabel = new Label("FPS: --");
+        fpsLabel.setFont(Font.font("Arial", 14));
+        particleLabel = new Label("Partículas: 0");
+        particleLabel.setFont(Font.font("Arial", 14));
+        
+        statsPanel.getChildren().addAll(fpsLabel, particleLabel);
+        
+        // Painel de controle para gravidade
+        HBox gravityPanel = new HBox(10);
+        gravityPanel.setAlignment(Pos.CENTER);
+        
         Slider gravitySlider = new Slider(0, 50, GRAVITY);
         gravitySlider.setShowTickLabels(true);
         gravitySlider.setShowTickMarks(true);
-        gravitySlider.setMajorTickUnit(0.001);
+        gravitySlider.setMajorTickUnit(5);
+        gravitySlider.setMinorTickCount(4);
+        gravitySlider.setBlockIncrement(1);
         gravitySlider.setPrefWidth(200);
         gravitySlider.valueProperty().addListener((obs, oldVal, newVal) -> {
             GRAVITY = newVal.doubleValue();
         });
-
-        fpsLabel = new Label("FPS: --");
-        fpsLabel.setFont(Font.font("Arial", 14));
-
-        particleLabel = new Label("Partículas: 0");
-        particleLabel.setFont(Font.font("Arial", 14));
-
-        controlPanel.getChildren().addAll(
-                new Label("Gravidade:"), gravitySlider, 
-                fpsLabel, particleLabel);
-
+        
+        gravityPanel.getChildren().addAll(new Label("Gravidade:"), gravitySlider);
+        
+        // Controle de colisões
+        VBox collisionPanel = new VBox(5);
+        collisionPanel.setAlignment(Pos.CENTER);
+        
+        CheckBox collisionCheckbox = new CheckBox("Ativar colisões");
+        collisionCheckbox.setSelected(COLLISIONS_ENABLED);
+        collisionCheckbox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            COLLISIONS_ENABLED = newVal;
+        });
+        
+        Label collisionDescription = new Label("Quando ativado, as partículas se fundem ao tocar uma na outra");
+        collisionDescription.setFont(Font.font("Arial", 10));
+        collisionDescription.setStyle("-fx-text-fill: #555;");
+        collisionDescription.setWrapText(true);
+        collisionDescription.setMaxWidth(250);
+        
+        collisionPanel.getChildren().addAll(collisionCheckbox, collisionDescription);
+        
+        // Adicionar todos os componentes ao painel principal
+        mainControlPanel.getChildren().addAll(
+            titleLabel,
+            description,
+            statsPanel,
+            gravityPanel,
+            collisionPanel
+        );
+        
+        // Layout principal
         BorderPane root = new BorderPane();
         root.setCenter(simulationPane);
-        root.setBottom(controlPanel);
+        root.setRight(mainControlPanel);
 
-        Scene scene = new Scene(root, SCREEN_SIZE_X, SCREEN_SIZE_Y + 50);
+        Scene scene = new Scene(root, SCREEN_SIZE_X + 300, SCREEN_SIZE_Y);
         primaryStage.setScene(scene);
-        primaryStage.setTitle("Simulação de Partículas Avançada");
+        primaryStage.setTitle("Particles Game");
         primaryStage.show();
 
         instantiateParticles(PARTICLE_SIZE, SCREEN_SIZE_X - 200, SCREEN_SIZE_Y - 200);
@@ -131,20 +188,57 @@ public class ParticlesGame extends Application {
             }
         }
 
-        // Atualizar física e verificar colisões com as paredes
-        List<Particle> particlesToRemove = new ArrayList<>();
-        
+        // Atualizar física
         for (Particle p : particles) {
             p.updatePhysics(FIXED_STEP_SECONDS);
+        }
+
+        // Verificar colisões e fundir partículas (se ativado)
+        if (COLLISIONS_ENABLED) {
+            Set<Particle> particlesToRemove = new HashSet<>();
+            List<Particle> newParticles = new ArrayList<>();
             
-            // Verificar se a partícula tocou em alguma parede
-            if (isTouchingWall(p)) {
-                particlesToRemove.add(p);
+            for (int i = 0; i < particles.size(); i++) {
+                Particle p1 = particles.get(i);
+                if (particlesToRemove.contains(p1)) continue;
+                
+                for (int j = i + 1; j < particles.size(); j++) {
+                    Particle p2 = particles.get(j);
+                    if (particlesToRemove.contains(p2)) continue;
+                    
+                    if (areParticlesTouching(p1, p2)) {
+                        particlesToRemove.add(p1);
+                        particlesToRemove.add(p2);
+                        
+                        // Criar nova partícula fundida
+                        Particle merged = mergeParticles(p1, p2);
+                        newParticles.add(merged);
+                        break; // Sair após fundir p1 com uma partícula
+                    }
+                }
+            }
+            
+            // Remover partículas fundidas
+            particles.removeAll(particlesToRemove);
+            simulationPane.getChildren().removeAll(particlesToRemove.stream()
+                    .map(Particle::getCircle)
+                    .toList());
+            
+            // Adicionar novas partículas fundidas
+            particles.addAll(newParticles);
+            for (Particle p : newParticles) {
+                simulationPane.getChildren().add(p.getCircle());
             }
         }
         
-        // Remover partículas que tocaram nas paredes
-        for (Particle p : particlesToRemove) {
+        // Verificar colisões com as paredes
+        List<Particle> wallCollisions = new ArrayList<>();
+        for (Particle p : particles) {
+            if (isTouchingWall(p)) {
+                wallCollisions.add(p);
+            }
+        }
+        for (Particle p : wallCollisions) {
             removeParticle(p);
         }
     }
@@ -166,17 +260,44 @@ public class ParticlesGame extends Application {
             double distance = Math.sqrt(distanceSq);
             p1.applyForce(force * dx/distance, force * dy/distance);
             p2.applyForce(-force * dx/distance, -force * dy/distance);
-        } 
-        // Repulsão com limite
-        else {
-            double distance = Math.sqrt(distanceSq);
-            double overlap = minDistance - distance;
-            double repelForce = REPEL_CONSTANT * overlap;
-            repelForce = Math.min(repelForce, MAX_FORCE);
-
-            p1.applyForce(-repelForce * dx/distance, -repelForce * dy/distance);
-            p2.applyForce(repelForce * dx/distance, repelForce * dy/distance);
         }
+    }
+
+    private boolean areParticlesTouching(Particle p1, Particle p2) {
+        double dx = p2.getPosX() - p1.getPosX();
+        double dy = p2.getPosY() - p1.getPosY();
+        double distance = Math.sqrt(dx*dx + dy*dy);
+        return distance < (p1.getRadius() + p2.getRadius());
+    }
+    
+    private Particle mergeParticles(Particle p1, Particle p2) {
+        // Calcular nova massa (soma das massas)
+        double newMass = p1.getMass() + p2.getMass();
+        
+        // Calcular novo tamanho (proporcional à raiz quadrada da massa para manter densidade)
+        double newSize = Math.sqrt(newMass) * 5; // Fator de escala para manter proporção
+        
+        // Calcular posição média (centro de massa)
+        double newX = (p1.getPosX() * p1.getMass() + p2.getPosX() * p2.getMass()) / newMass;
+        double newY = (p1.getPosY() * p1.getMass() + p2.getPosY() * p2.getMass()) / newMass;
+        
+        // Calcular nova velocidade (conservação do momento)
+        double newVx = (p1.getVelocityX() * p1.getMass() + p2.getVelocityX() * p2.getMass()) / newMass;
+        double newVy = (p1.getVelocityY() * p1.getMass() + p2.getVelocityY() * p2.getMass()) / newMass;
+        
+        // Criar nova partícula
+        Particle merged = new Particle(newSize, newX, newY);
+        merged.setMass(newMass);
+        merged.setVelocity(newVx, newVy);
+        
+        // Usar cor da partícula com maior massa
+        if (p1.getMass() > p2.getMass()) {
+            merged.getCircle().setFill(p1.getCircle().getFill());
+        } else {
+            merged.getCircle().setFill(p2.getCircle().getFill());
+        }
+        
+        return merged;
     }
 
     private boolean isTouchingWall(Particle p) {
@@ -184,7 +305,6 @@ public class ParticlesGame extends Application {
         double x = p.getPosX();
         double y = p.getPosY();
 
-        // Verificar se a partícula tocou em alguma parede
         return (x - radius <= 0) || 
                (x + radius >= SCREEN_SIZE_X) ||
                (y - radius <= 0) || 
@@ -241,100 +361,5 @@ public class ParticlesGame extends Application {
 
     public static void main(String[] args) {
         launch(args);
-    }
-    
-    // Classe Particle permanece inalterada
-    public static class Particle {
-        private static long nextId = 0;
-        private final long id;
-        private final Circle circle;
-        private double posX;
-        private double posY;
-        private double velocityX;
-        private double velocityY;
-        private double accelerationX;
-        private double accelerationY;
-        private double mass = 1.0;
-        private double radius;
-
-        public Particle(double radius, double posX, double posY) {
-            this.id = nextId++;
-            this.radius = radius;
-            this.circle = new Circle(radius);
-            this.posX = posX;
-            this.posY = posY;
-            updateView();
-        }
-
-        public long getId() {
-            return id;
-        }
-
-        public Circle getCircle() {
-            return circle;
-        }
-
-        public double getPosX() {
-            return posX;
-        }
-
-        public double getPosY() {
-            return posY;
-        }
-
-        public double getVelocityX() {
-            return velocityX;
-        }
-
-        public double getVelocityY() {
-            return velocityY;
-        }
-
-        public double getMass() {
-            return mass;
-        }
-
-        public double getRadius() {
-            return radius;
-        }
-
-        public void setMass(double mass) {
-            this.mass = mass;
-        }
-
-        public void setPos(double x, double y) {
-            this.posX = x;
-            this.posY = y;
-        }
-
-        public void setVelocity(double vx, double vy) {
-            this.velocityX = vx;
-            this.velocityY = vy;
-        }
-
-        public void applyForce(double fx, double fy) {
-            accelerationX += fx / mass;
-            accelerationY += fy / mass;
-        }
-
-        public void resetForces() {
-            accelerationX = 0;
-            accelerationY = 0;
-        }
-
-        public void updatePhysics(double deltaTime) {
-            // Atualizar velocidade
-            velocityX += accelerationX * deltaTime;
-            velocityY += accelerationY * deltaTime;
-
-            // Atualizar posição
-            posX += velocityX * deltaTime;
-            posY += velocityY * deltaTime;
-        }
-
-        public void updateView() {
-            circle.setCenterX(posX);
-            circle.setCenterY(posY);
-        }
     }
 }
