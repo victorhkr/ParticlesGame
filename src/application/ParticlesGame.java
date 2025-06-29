@@ -5,10 +5,10 @@ import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Slider;
-import javafx.scene.control.Tooltip;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
@@ -35,6 +35,7 @@ public class ParticlesGame extends Application {
     private static final double MAX_FORCE = 1000.0;
     private static final double FIXED_STEP_SECONDS = 0.016; // 60 FPS
     private static boolean COLLISIONS_ENABLED = true;
+    private static boolean PAUSED = false;
 
     private final List<Particle> particles = new ArrayList<>();
     private long frameCount = 0;
@@ -55,6 +56,7 @@ public class ParticlesGame extends Application {
         VBox mainControlPanel = new VBox(15);
         mainControlPanel.setPadding(new Insets(15));
         mainControlPanel.setAlignment(Pos.TOP_CENTER);
+        mainControlPanel.setStyle("-fx-background-color: #f5f5f5; -fx-border-color: #ddd; -fx-border-width: 0 0 0 1;");
         
         // Título do jogo
         Label titleLabel = new Label("Particles Game");
@@ -81,7 +83,7 @@ public class ParticlesGame extends Application {
         statsPanel.getChildren().addAll(fpsLabel, particleLabel);
         
         // Painel de controle para gravidade
-        HBox gravityPanel = new HBox(10);
+        VBox gravityPanel = new VBox(5);
         gravityPanel.setAlignment(Pos.CENTER);
         
         Slider gravitySlider = new Slider(0, 50, GRAVITY);
@@ -95,7 +97,17 @@ public class ParticlesGame extends Application {
             GRAVITY = newVal.doubleValue();
         });
         
-        gravityPanel.getChildren().addAll(new Label("Gravidade:"), gravitySlider);
+        Label gravityValueLabel = new Label(String.format("Força: %.1f", GRAVITY));
+        gravityValueLabel.setFont(Font.font("Arial", 12));
+        gravitySlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+            gravityValueLabel.setText(String.format("Força: %.1f", newVal.doubleValue()));
+        });
+        
+        gravityPanel.getChildren().addAll(
+            new HBox(5, new Label("Gravidade:"), 
+            gravitySlider,
+            gravityValueLabel)
+        );
         
         // Controle de colisões
         VBox collisionPanel = new VBox(5);
@@ -115,13 +127,50 @@ public class ParticlesGame extends Application {
         
         collisionPanel.getChildren().addAll(collisionCheckbox, collisionDescription);
         
+        // Botão de pausa
+        Button pauseButton = new Button("Pausar");
+        pauseButton.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white;");
+        pauseButton.setPrefWidth(120);
+        pauseButton.setOnAction(e -> {
+            PAUSED = !PAUSED;
+            if (PAUSED) {
+                pauseButton.setText("Continuar");
+                pauseButton.setStyle("-fx-background-color: #f44336; -fx-text-fill: white;");
+            } else {
+                pauseButton.setText("Pausar");
+                pauseButton.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white;");
+            }
+        });
+        
+        // Dicas de uso
+        VBox tipsPanel = new VBox(5);
+        tipsPanel.setAlignment(Pos.CENTER_LEFT);
+        tipsPanel.setStyle("-fx-background-color: #e3f2fd; -fx-padding: 10; -fx-border-radius: 5;");
+        
+        Label tipsTitle = new Label("Dicas:");
+        tipsTitle.setFont(Font.font("Arial", 12));
+        tipsTitle.setStyle("-fx-font-weight: bold;");
+        
+        Label tip1 = new Label("• Partículas vermelhas são mais pesadas");
+        tip1.setFont(Font.font("Arial", 10));
+        
+        Label tip2 = new Label("• Partículas grandes surgem de fusões");
+        tip2.setFont(Font.font("Arial", 10));
+        
+        Label tip3 = new Label("• Desative colisões para simulações rápidas");
+        tip3.setFont(Font.font("Arial", 10));
+        
+        tipsPanel.getChildren().addAll(tipsTitle, tip1, tip2, tip3);
+        
         // Adicionar todos os componentes ao painel principal
         mainControlPanel.getChildren().addAll(
             titleLabel,
             description,
             statsPanel,
             gravityPanel,
-            collisionPanel
+            collisionPanel,
+            pauseButton,
+            tipsPanel
         );
         
         // Layout principal
@@ -129,7 +178,7 @@ public class ParticlesGame extends Application {
         root.setCenter(simulationPane);
         root.setRight(mainControlPanel);
 
-        Scene scene = new Scene(root, SCREEN_SIZE_X + 300, SCREEN_SIZE_Y);
+        Scene scene = new Scene(root, SCREEN_SIZE_X + 320, SCREEN_SIZE_Y);
         primaryStage.setScene(scene);
         primaryStage.setTitle("Particles Game");
         primaryStage.show();
@@ -137,6 +186,7 @@ public class ParticlesGame extends Application {
         instantiateParticles(PARTICLE_SIZE, SCREEN_SIZE_X - 200, SCREEN_SIZE_Y - 200);
 
         simulationPane.setOnMouseClicked(e -> {
+            if (PAUSED) return; // Não permite interação quando pausado
             if (e.getButton() == MouseButton.PRIMARY) {
                 addNewParticle(e.getX(), e.getY(), 10, 10000, Color.RED);
             } else if (e.getButton() == MouseButton.SECONDARY) {
@@ -157,6 +207,10 @@ public class ParticlesGame extends Application {
                     startTime = now;
                 }
                 particleLabel.setText(String.format("Partículas: %d", particles.size()));
+
+                if (PAUSED) {
+                    return; // Não atualiza a física se o jogo estiver pausado
+                }
 
                 // Atualização de física com passo fixo
                 if (now - lastUpdate >= 16_000_000) {
